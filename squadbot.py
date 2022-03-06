@@ -1,4 +1,4 @@
-# batebot.py
+# squadbot.py
 
 import os
 import discord
