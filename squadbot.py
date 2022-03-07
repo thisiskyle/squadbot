@@ -2,6 +2,18 @@
 
 import os
 import discord
+from config import token, quorum_channel_id, test_channel_id, guild_id
+
+# variables
+props = [ ]
+emoji_thumbsup = '\N{THUMBS UP SIGN}'
+emoji_thumbsdown = '\N{THUMBS DOWN SIGN}'
+
+# setup client intents
+custom_intents = discord.Intents.default()
+custom_intents.members = True
+custom_intents.guilds = True
+
 
 
 # get the token
@@ -121,24 +133,6 @@ __**Proposal \#{len(props) + 1}**__
         # add reactions
         await response.add_reaction(emoji_thumbsup)
         await response.add_reaction(emoji_thumbsdown)
-
-
-
-# variables
-token = get_token()
-quorum_channel_id = 946043443463991316
-test_channel_id = 946216621930840064
-guild_id = 946041821946085426
-props = [ ]
-emoji_thumbsup = '\N{THUMBS UP SIGN}'
-emoji_thumbsdown = '\N{THUMBS DOWN SIGN}'
-
-
-
-# setup client intents
-custom_intents = discord.Intents.default()
-custom_intents.members = True
-custom_intents.guilds = True
 
 
 # start client
