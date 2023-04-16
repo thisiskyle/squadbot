@@ -1,20 +1,30 @@
 # squadbot.py
-# TODO/feature: add a timeout date
-# TODO/feature: add a text file that stores the quorum message IDs
-# TODO/feature: add more logging
+
+# TODO/bug: maybe before we close a quorum, we should audit the votes and make sure there isnt a double vote?
+#           if squadbot is turned off and someone votes for yes and no, we can just remove those votes?
 
 import os
 import discord
-from config import token, quorum_channel_id, test_channel_id, guild_id
+import config
+import json
+
+#class Quorum_Data:
+#    ids = []
+#    authors = []
+#    contents = []
+#    ayes = []
+#    nays = []
 
 
 emoji_thumbsup = '\N{THUMBS UP SIGN}'
 emoji_thumbsdown = '\N{THUMBS DOWN SIGN}'
+result_unresolved = "unresolved"
 result_pass = "pass"
 result_fail = "fail"
 result_tie = "tie"
 status_open = "open"
 status_closed = "closed"
+
 
 # setup client intents
 custom_intents = discord.Intents.default()
@@ -22,34 +32,19 @@ custom_intents.members = True
 custom_intents.guilds = True
 
 
-#
-# get the token
-#
-def get_token():
-    # open the file containing our token
-    file = open("token.txt", "r")
-    # read the first line
-    t = file.readline()
-    # close file
-    file.close()
-    # return the token
-    return t
-
-
-#
 # edits the message with the results of the quorum
-#
 async def post_results(message, result_string):
-        print(f"\nQuorum {message.id}, {result_string}")
-        new_content = message.content.replace(status_open, status_closed + "\n__**Result:**__ " + result_string)
-        await message.edit(content=new_content)
+    print(f"\nQuorum {message.id}, {result_string}")
+    new_content = message.content.replace(status_open, status_closed).replace(result_unresolved, result_string)
+    await message.edit(content=new_content)
 
 
+# get the total members of a guild, excluding bots
+def get_member_count(guild):
+    return len([m for m in guild.members if not m.bot])
 
-#
-# returns the number of members in guild
-# with a matching role name
-#
+
+# returns the number of members in guild with a matching role name
 def get_role_count(guild, role_name):
     count = 0
     for member in guild.members:
@@ -64,20 +59,20 @@ async def handle_vote(payload):
 
     print(f"\nVote Received:\n{payload}")
 
-    #if not payload.member.bot and payload.channel_id == quorum_channel_id:
-    if not payload.member.bot and payload.channel_id == test_channel_id:
-        #channel = client.get_channel(quorum_channel_id)
-        channel = client.get_channel(test_channel_id)
+    if not payload.member.bot and payload.channel_id == config.quorum_channel_id:
+        channel = client.get_channel(config.quorum_channel_id)
         message = await channel.fetch_message(payload.message_id)
 
+        proposal = json.loads(message.content)
+
         # if the quorum is closed
-        if status_closed in message.content:
+        if proposal['status'] == status_closed:
             print("This quorum is closed, vote ignored")
             return
     else:
         return
 
-    camper_count = get_role_count(client.get_guild(guild_id), "camper-2022")
+    member_count = get_member_count(message.guild)
 
     nays = None 
     ayes = None
@@ -96,30 +91,28 @@ async def handle_vote(payload):
             nays = r
 
     # post results if closed
-    if nays != None and ayes != None and ayes.count + nays.count == camper_count + 2:
+    if nays != None and ayes != None and ayes.count + nays.count == member_count + 2:
         await close_quorum(message, ayes.count, nays.count)
 
 
-#
 # decide outcome of a quorum
-#
 async def close_quorum(message, ayes, nays):
 
-        print(f"\nClosing quorum {message.id}")
+    print(f"\nClosing quorum {message.id}")
 
-        if ayes > nays:
-            await post_results(message, result_pass)
-        elif nays > ayes:
-            await post_results(message, result_fail)
-        elif nays == ayes:
-            await post_results(message, result_tie)
+    if ayes > nays:
+        await post_results(message, result_pass)
+    elif nays > ayes:
+        await post_results(message, result_fail)
+    else:
+        await post_results(message, result_unresolved)
 
 #
 # closes the quorum in its current state
 # missing votes default to "aye"
 #
 async def force_close_quorum(message):
-    camper_count = get_role_count(client.get_guild(guild_id), "camper-2022") + 2
+    member_count = get_member_count(message.guild)
     nays = None 
     ayes = None
 
@@ -131,93 +124,93 @@ async def force_close_quorum(message):
         elif r.emoji == emoji_thumbsdown:
             nays = r
 
-    extra_ayes = camper_count - (ayes.count + nays.count)
+    # unused votes are automatically counted as "aye"
+    extra_ayes = member_count - (ayes.count + nays.count)
     await close_quorum(message, ayes.count + extra_ayes, nays.count)
 
-#
+
 # handles the close command
-#
-async def handle_close(message):
-        # split the content of the command
-        command = message.content.split(" ", 1)
+async def handle_command_close(message):
 
-        # if we didnt get a body with the command, ignore it and return
-        if len(command) < 2:
-            return
+    # split the content of the command
+    command = message.content.split(" ", 1)
 
-        channel = client.get_channel(test_channel_id)
-        m = await channel.fetch_message(int(command[1]))
-        await force_close_quorum(m)
+    channel = client.get_channel(config.quorum_channel_id)
+    m = await channel.fetch_message(int(command[1]))
+    await force_close_quorum(m)
 
 
-#
-# handles the quorum command
-#
-async def handle_quorum(message):
 
-        # split the content of the command
-        command = message.content.split(" ", 1)
+# handles the !quorum command
+async def handle_command_quorum(message):
 
-        # if we didnt get a body with the command, ignore it and return
-        if len(command) < 2:
-            return
+    # get quorum channel
+    channel = client.get_channel(config.quorum_channel_id)
+    # split the content of the command
+    command = message.content.split(" ", 1)
+    # create temp message to get message ID
+    response = await channel.send("---")
 
-        # get quorum channel
-        #channel = client.get_channel(quorum_channel_id)
-        channel = client.get_channel(test_channel_id)
+    proposal = {
+        "id": response.id,
+        "author_id": message.author.id,
+        "author_name": message.author.name,
+        "status": status_open,
+        "result": result_unresolved,
+        "proposal": command[1]
+    }
 
-        # get @campers-2022 role
-        role = discord.utils.get(message.guild.roles, name="camper-2022")
+    await response.edit(content=json.dumps(proposal, indent=4))
+    await response.add_reaction(emoji_thumbsup)
+    await response.add_reaction(emoji_thumbsdown)
 
-        # create temp message to get message ID
-        response = await channel.send("---")
+    # TODO/feature: create a link to the quorum in the original channel
 
-        # build the response string
-        # this is formatted weird because of the special triple quote
-        #prop_string = f"""---- <@&{role.id}>
-        prop_string = f"""-
-__**Quorum ID:**__ {response.id}
-__**Status:**__ {status_open}
-__**Caller:**__ {message.author.name}
-__**Subject:**__ {command[1]}
-"""
 
-        await response.edit(content=prop_string)
-        await response.add_reaction(emoji_thumbsup)
-        await response.add_reaction(emoji_thumbsdown)
+# handles the !help command
+async def handle_command_help(message):
+    print("someone needs !help. we should finish this command...")
 
 
 # start client
 client = discord.Client(intents=custom_intents)
 
-#
+
 # when the bot logs on
-#
 @client.event
 async def on_ready():
     print(f'{client.user} connected!')
 
-#
+
 # this functions listens for a message
-#
 @client.event
 async def on_message(message):
+
     if message.author == client.user:
         return
 
-    if "!quorum" in message.content:
-        await handle_quorum(message)
+    # split the content of the command
+    command = message.content.split(" ", 1)
 
-    if "!close" in message.content:
-        await handle_close(message)
+    # if we didnt get a body with the command, ignore it and return
+    if len(command) < 2:
+        return
 
-#
+    if command[0] == "!quorum" or command[0] == "!q":
+        await handle_command_quorum(message)
+
+    elif command[0] == "!close":
+        await handle_command_close(message)
+
+    elif command[0] == "!help":
+        await handle_command_help()
+
+
 # when someone adds a vote
-#
 @client.event
 async def on_raw_reaction_add(payload):
     await handle_vote(payload)
 
 
 # start the bot
-client.run(token)
+client.run(config.token)
