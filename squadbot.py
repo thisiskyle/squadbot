@@ -8,12 +8,14 @@ import discord
 import config
 import json
 
-#class Quorum_Data:
-#    ids = []
-#    authors = []
-#    contents = []
-#    ayes = []
-#    nays = []
+
+quorum_ids = []
+quorum_authors = []
+quorum_contents = []
+quorum_ayes = []
+quorum_nays = []
+quorum_status = []
+quorum_results = []
 
 
 emoji_thumbsup = '\N{THUMBS UP SIGN}'
@@ -135,6 +137,10 @@ async def handle_command_close(message):
     # split the content of the command
     command = message.content.split(" ", 1)
 
+    # if we didnt get a body with the command, ignore it and return
+    if len(command) < 2:
+        return
+
     channel = client.get_channel(config.quorum_channel_id)
     m = await channel.fetch_message(int(command[1]))
     await force_close_quorum(m)
@@ -144,10 +150,16 @@ async def handle_command_close(message):
 # handles the !quorum command
 async def handle_command_quorum(message):
 
-    # get quorum channel
-    channel = client.get_channel(config.quorum_channel_id)
     # split the content of the command
     command = message.content.split(" ", 1)
+
+    # if we didnt get a body with the command, ignore it and return
+    if len(command) < 2:
+        return
+
+    # get quorum channel
+    channel = client.get_channel(config.quorum_channel_id)
+
     # create temp message to get message ID
     response = await channel.send("---")
 
@@ -165,6 +177,39 @@ async def handle_command_quorum(message):
     await response.add_reaction(emoji_thumbsdown)
 
     # TODO/feature: create a link to the quorum in the original channel
+
+#
+def save_to_file():
+    print("Saving quorum data to file")
+    qobj = {
+        "ids": quorum_ids,
+        "author_ids": quorum_authors,
+        "status": quorum_status,
+        "results": quorum_results,
+        "proposals": quorum_contents,
+        "ayes": quorum_ayes,
+        "nays": quorum_nays
+    }
+
+    with open("quorums.json", "w") as outfile:
+        outfile.write(json.dumps(qobj, indent=4))
+
+
+#
+def load_from_file():
+    print("Loading quorum data from file")
+
+    f = open("quorums.json", "w")
+
+    qobj = json.load(f)
+
+    quorum_ids = qobj['ids']
+    quorum_authors = qobj['author_ids']
+    quorum_contents = qobj['proposals']
+    quorum_ayes = qobj['ayes']
+    quorum_nays = qobj['nays']
+    quorum_status = qobj['status']
+    quorum_results = qobj['results']
 
 
 # handles the !help command
@@ -191,10 +236,6 @@ async def on_message(message):
 
     # split the content of the command
     command = message.content.split(" ", 1)
-
-    # if we didnt get a body with the command, ignore it and return
-    if len(command) < 2:
-        return
 
     if command[0] == "!quorum" or command[0] == "!q":
         await handle_command_quorum(message)
