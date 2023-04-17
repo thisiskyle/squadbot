@@ -62,6 +62,9 @@ async def handle_vote(payload):
 
     print(f"\nVote Received")
 
+    if str(payload.emoji) != str(emoji_thumbsdown) and str(payload.emoji) != str(emoji_thumbsup):
+        print(f"Reacting with {payload.emoji} is an invalid vote. Vote ignored")
+        return
 
     if payload.member.bot:
         print("Bot vote ignored")
@@ -81,15 +84,17 @@ async def handle_vote(payload):
 
     print(f"\n{payload.member.name} voted {payload.emoji}" )
 
-    member_count = get_member_count(message.guild)
-
     nays = None 
     ayes = None
 
     # collect the reactions
     for r in message.reactions:
+        # if its not thumbsup or thumbs down, skip it
+        if r.emoji != emoji_thumbsup and r.emoji != emoji_thumbsdown:
+            continue
+
         users = [user async for user in r.users()]
-        if payload.member in users and str(r) != str(payload.emoji):
+        if payload.member in users and str(r.emoji) != str(payload.emoji):
             print(f"\n{payload.member.name} is changing vote, removing previous reaction")
             await message.remove_reaction(r.emoji, payload.member)
 
@@ -99,6 +104,8 @@ async def handle_vote(payload):
         elif r.emoji == emoji_thumbsdown:
             nays = r
 
+
+    member_count = get_member_count(message.guild)
     # post results if closed
     if nays != None and ayes != None and ayes.count + nays.count == member_count + 2:
         await close_quorum(message, ayes.count, nays.count)
@@ -181,7 +188,7 @@ async def handle_command_quorum(message):
     await response.add_reaction(emoji_thumbsup)
     await response.add_reaction(emoji_thumbsdown)
 
-    # TODO/feature: create a link to the quorum in the original channel
+    await message.channel.send(f"A new quorum has been called!\n\nThis isn't like the electoral college, your vote actually matters!\nSo get out there and vote!\n\nFollow this link: {response.jump_url}")
 
 #
 def save_to_file():
