@@ -32,6 +32,7 @@ status_closed = "closed"
 custom_intents = discord.Intents.default()
 custom_intents.members = True
 custom_intents.guilds = True
+custom_intents.message_content = True
 
 
 # edits the message with the results of the quorum
@@ -59,14 +60,14 @@ def get_role_count(guild, role_name):
 # handle when someone just voted
 async def handle_vote(payload):
 
-    print(f"\nVote Received:\n{payload}")
+    print(f"\nVote Received")
 
     if not payload.member.bot and payload.channel_id == config.quorum_channel_id:
         channel = client.get_channel(config.quorum_channel_id)
         message = await channel.fetch_message(payload.message_id)
 
-        proposal = json.loads(message.content)
 
+        proposal = json.loads(message.content)
         # if the quorum is closed
         if proposal['status'] == status_closed:
             print("This quorum is closed, vote ignored")
@@ -81,10 +82,13 @@ async def handle_vote(payload):
 
     # collect the reactions
     for r in message.reactions:
+        users = [user async for user in r.users()]
         # checks the reactant isn't a bot and the emoji isn't the one they just reacted with
-        if payload.member in await r.users().flatten() and not payload.member.bot and str(r) != str(payload.emoji):
-            print(f"\n{payload.member.name} is changing vote")
+        if payload.member in users and not payload.member.bot and str(r) != str(payload.emoji):
+            print(f"\n{payload.member.name} is changing vote to {payload.emoji}")
             await message.remove_reaction(r.emoji, payload.member)
+        else:
+            print(f"\n{payload.member.name} voted {payload.emoji}" )
 
         # collect votes
         if r.emoji == emoji_thumbsup:
@@ -109,10 +113,8 @@ async def close_quorum(message, ayes, nays):
     else:
         await post_results(message, result_unresolved)
 
-#
-# closes the quorum in its current state
-# missing votes default to "aye"
-#
+
+# closes the quorum in its current state missing votes default to "aye"
 async def force_close_quorum(message):
     member_count = get_member_count(message.guild)
     nays = None 
@@ -230,20 +232,25 @@ async def on_ready():
 # this functions listens for a message
 @client.event
 async def on_message(message):
+    print("Incoming message...")
 
-    if message.author == client.user:
+    if message.author.bot:
+        print("Author is a bot, ignoring")
         return
 
     # split the content of the command
     command = message.content.split(" ", 1)
 
     if command[0] == "!quorum" or command[0] == "!q":
+        print("!quorum command found")
         await handle_command_quorum(message)
 
     elif command[0] == "!close":
+        print("!close command found")
         await handle_command_close(message)
 
     elif command[0] == "!help":
+        print("!help command found")
         await handle_command_help()
 
 
