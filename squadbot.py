@@ -62,18 +62,24 @@ async def handle_vote(payload):
 
     print(f"\nVote Received")
 
-    if not payload.member.bot and payload.channel_id == config.quorum_channel_id:
-        channel = client.get_channel(config.quorum_channel_id)
-        message = await channel.fetch_message(payload.message_id)
 
-
-        proposal = json.loads(message.content)
-        # if the quorum is closed
-        if proposal['status'] == status_closed:
-            print("This quorum is closed, vote ignored")
-            return
-    else:
+    if payload.member.bot:
+        print("Bot vote ignored")
         return
+
+    if payload.channel_id != config.quorum_channel_id:
+        print("Reaction not in quorum channel, vote ignored")
+        return
+
+    channel = client.get_channel(config.quorum_channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    proposal = json.loads(message.content)
+
+    if proposal['status'] == status_closed:
+        print("This quorum is closed, vote ignored")
+        return
+
+    print(f"\n{payload.member.name} voted {payload.emoji}" )
 
     member_count = get_member_count(message.guild)
 
@@ -83,14 +89,11 @@ async def handle_vote(payload):
     # collect the reactions
     for r in message.reactions:
         users = [user async for user in r.users()]
-        # checks the reactant isn't a bot and the emoji isn't the one they just reacted with
-        if payload.member in users and not payload.member.bot and str(r) != str(payload.emoji):
-            print(f"\n{payload.member.name} is changing vote to {payload.emoji}")
+        if payload.member in users and str(r) != str(payload.emoji):
+            print(f"\n{payload.member.name} is changing vote, removing previous reaction")
             await message.remove_reaction(r.emoji, payload.member)
-        else:
-            print(f"\n{payload.member.name} voted {payload.emoji}" )
 
-        # collect votes
+        # count votes
         if r.emoji == emoji_thumbsup:
             ayes = r
         elif r.emoji == emoji_thumbsdown:
