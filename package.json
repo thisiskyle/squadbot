@@ -1,0 +1,22 @@
+{
+  "name": "squadbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "squadbot.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thisiskyle/squadbot.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/thisiskyle/squadbot/issues"
+  },
+  "homepage": "https://github.com/thisiskyle/squadbot#readme",
+  "dependencies": {
+    "discord.js": "^14.11.0"
+  }
+}
